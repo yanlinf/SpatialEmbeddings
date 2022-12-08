@@ -92,7 +92,7 @@ with torch.no_grad():
                 for id, pred in enumerate(predictions):
                     im_name = base + '_{:02d}.png'.format(id)
                     im = torchvision.transforms.ToPILImage()(
-                        pred['mask'].unsqueeze(0))
+                        pred['mask'].type(torch.uint8))
 
                     # write image
                     im.save(os.path.join(args['save_dir'], im_name))
