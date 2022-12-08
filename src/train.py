@@ -37,15 +37,15 @@ device = torch.device("cuda:0" if args['cuda'] else "cpu")
 train_dataset = get_dataset(
     args['train_dataset']['name'], args['train_dataset']['kwargs'])
 train_dataset_it = torch.utils.data.DataLoader(
-    train_dataset, batch_size=args['train_dataset']['batch_size'], shuffle=True, drop_last=True, num_workers=args['train_dataset']['workers'], pin_memory=True if args['cuda'] else False)
-
+    train_dataset, batch_size=args['train_dataset']['batch_size'], shuffle=True, drop_last=True,
+    num_workers=args['train_dataset']['workers'], pin_memory=True if args['cuda'] else False)
 
 # val dataloader
 val_dataset = get_dataset(
     args['val_dataset']['name'], args['val_dataset']['kwargs'])
 val_dataset_it = torch.utils.data.DataLoader(
-    val_dataset, batch_size=args['val_dataset']['batch_size'], shuffle=True, drop_last=True, num_workers=args['train_dataset']['workers'], pin_memory=True if args['cuda'] else False)
-
+    val_dataset, batch_size=args['val_dataset']['batch_size'], shuffle=True, drop_last=True,
+    num_workers=args['train_dataset']['workers'], pin_memory=True if args['cuda'] else False)
 
 # set model
 model = get_model(args['model']['name'], args['model']['kwargs'])
@@ -60,11 +60,13 @@ criterion = torch.nn.DataParallel(criterion).to(device)
 optimizer = torch.optim.Adam(
     model.parameters(), lr=args['lr'], weight_decay=1e-4)
 
+
 def lambda_(epoch):
-    return pow((1-((epoch)/args['n_epochs'])), 0.9)
+    return pow((1 - ((epoch) / args['n_epochs'])), 0.9)
+
 
 scheduler = torch.optim.lr_scheduler.LambdaLR(
-    optimizer, lr_lambda=lambda_,)
+    optimizer, lr_lambda=lambda_, )
 
 # clustering
 cluster = Cluster()
@@ -87,13 +89,15 @@ if args['resume_path'] is not None and os.path.exists(args['resume_path']):
     optimizer.load_state_dict(state['optim_state_dict'])
     logger.data = state['logger_data']
 
-def train(epoch):
 
+def train(epoch):
     # define meters
     loss_meter = AverageMeter()
 
     # put model into training mode
     model.train()
+
+    optimizer.zero_grad()
 
     for param_group in optimizer.param_groups:
         print('learning rate: {}'.format(param_group['lr']))
@@ -108,19 +112,20 @@ def train(epoch):
         loss = criterion(output, instances, class_labels, **args['loss_w'])
         loss = loss.mean()
 
-        optimizer.zero_grad()
         loss.backward()
-        optimizer.step()
+        if (i + 1) % args['grad_accu'] == 0:
+            optimizer.step()
+            optimizer.zero_grad()
 
         if args['display'] and i % args['display_it'] == 0:
             with torch.no_grad():
                 visualizer.display(im[0], 'image')
-                
+
                 predictions = cluster.cluster_with_gt(output[0], instances[0], n_sigma=args['loss_opts']['n_sigma'])
                 visualizer.display([predictions.cpu(), instances[0].cpu()], 'pred')
 
                 sigma = output[0][2].cpu()
-                sigma = (sigma - sigma.min())/(sigma.max() - sigma.min())
+                sigma = (sigma - sigma.min()) / (sigma.max() - sigma.min())
                 sigma[instances[0] == 0] = 0
                 visualizer.display(sigma, 'sigma')
 
@@ -131,8 +136,8 @@ def train(epoch):
 
     return loss_meter.avg
 
-def val(epoch):
 
+def val(epoch):
     # define meters
     loss_meter, iou_meter = AverageMeter(), AverageMeter()
 
@@ -149,21 +154,21 @@ def val(epoch):
 
             output = model(im)
             loss = criterion(output, instances, class_labels, **
-                            args['loss_w'], iou=True, iou_meter=iou_meter)
+            args['loss_w'], iou=True, iou_meter=iou_meter)
             loss = loss.mean()
 
             if args['display'] and i % args['display_it'] == 0:
                 with torch.no_grad():
                     visualizer.display(im[0], 'image')
-                
+
                     predictions = cluster.cluster_with_gt(output[0], instances[0], n_sigma=args['loss_opts']['n_sigma'])
                     visualizer.display([predictions.cpu(), instances[0].cpu()], 'pred')
-    
+
                     sigma = output[0][2].cpu()
-                    sigma = (sigma - sigma.min())/(sigma.max() - sigma.min())
+                    sigma = (sigma - sigma.min()) / (sigma.max() - sigma.min())
                     sigma[instances[0] == 0] = 0
                     visualizer.display(sigma, 'sigma')
-    
+
                     seed = torch.sigmoid(output[0][3]).cpu()
                     visualizer.display(seed, 'seed')
 
@@ -171,13 +176,15 @@ def val(epoch):
 
     return loss_meter.avg, iou_meter.avg
 
+
 def save_checkpoint(state, is_best, name='checkpoint.pth'):
-    print('=> saving checkpoint')
     file_name = os.path.join(args['save_dir'], name)
+    print(f'=> saving checkpoint to {file_name}')
     torch.save(state, file_name)
     if is_best:
         shutil.copyfile(file_name, os.path.join(
             args['save_dir'], 'best_iou_model.pth'))
+
 
 for epoch in range(start_epoch, args['n_epochs']):
 
@@ -194,15 +201,15 @@ for epoch in range(start_epoch, args['n_epochs']):
     logger.add('val', val_loss)
     logger.add('iou', val_iou)
     logger.plot(save=args['save'], save_dir=args['save_dir'])
-    
+
     is_best = val_iou > best_iou
     best_iou = max(val_iou, best_iou)
-        
+
     if args['save']:
         state = {
             'epoch': epoch,
-            'best_iou': best_iou, 
-            'model_state_dict': model.state_dict(), 
+            'best_iou': best_iou,
+            'model_state_dict': model.state_dict(),
             'optim_state_dict': optimizer.state_dict(),
             'logger_data': logger.data
         }

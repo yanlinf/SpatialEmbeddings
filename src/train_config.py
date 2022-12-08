@@ -10,7 +10,7 @@ from PIL import Image
 import torch
 from utils import transforms as my_transforms
 
-CITYSCAPES_DIR=os.environ.get('CITYSCAPES_DIR')
+CITYSCAPES_DIR = os.environ.get('CITYSCAPES_DIR')
 
 args = dict(
 
@@ -19,10 +19,12 @@ args = dict(
     display_it=5,
 
     save=True,
-    save_dir='./exp',
-    resume_path=None, 
+    save_dir='./exp2',
+    resume_path=None,
 
-    train_dataset = {
+    grad_accu=1,
+
+    train_dataset={
         'name': 'cityscapes',
         'kwargs': {
             'root_dir': CITYSCAPES_DIR,
@@ -32,7 +34,7 @@ args = dict(
                 {
                     'name': 'RandomCrop',
                     'opts': {
-                        'keys': ('image', 'instance','label'),
+                        'keys': ('image', 'instance', 'label'),
                         'size': (512, 512),
                     }
                 },
@@ -47,9 +49,9 @@ args = dict(
         },
         'batch_size': 16,
         'workers': 8
-    }, 
+    },
 
-    val_dataset = {
+    val_dataset={
         'name': 'cityscapes',
         'kwargs': {
             'root_dir': CITYSCAPES_DIR,
@@ -66,14 +68,14 @@ args = dict(
         },
         'batch_size': 16,
         'workers': 8
-    }, 
+    },
 
-    model = {
-        'name': 'branched_erfnet', 
+    model={
+        'name': 'branched_erfnet',
         'kwargs': {
-            'num_classes': [3,1]
+            'num_classes': [3, 1]
         }
-    }, 
+    },
 
     lr=5e-4,
     n_epochs=200,
