@@ -10,18 +10,19 @@ from PIL import Image
 import torch
 from utils import transforms as my_transforms
 
-CITYSCAPES_DIR=os.environ.get('CITYSCAPES_DIR')
+CITYSCAPES_DIR = os.environ.get('CITYSCAPES_DIR')
 
 args = dict(
 
     cuda=True,
-    display=True,
+    display=False,
 
-    save=False,
+    save=True,
     save_dir='./masks/',
-    checkpoint_path='./pretrained_models/cars_pretrained_model.pth',
+    # checkpoint_path='./pretrained_models/cars_pretrained_model.pth',
+    checkpoint_path='./exp/best_iou_model.pth',
 
-    dataset= { 
+    dataset={
         'name': 'cityscapes',
         'kwargs': {
             'root_dir': CITYSCAPES_DIR,
@@ -37,8 +38,8 @@ args = dict(
             ]),
         }
     },
-        
-    model = {
+
+    model={
         'name': 'branched_erfnet',
         'kwargs': {
             'num_classes': [3, 1],

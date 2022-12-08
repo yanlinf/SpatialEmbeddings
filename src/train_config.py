@@ -15,7 +15,7 @@ CITYSCAPES_DIR = os.environ.get('CITYSCAPES_DIR')
 args = dict(
 
     cuda=True,
-    display=True,
+    display=False,
     display_it=5,
 
     save=True,
@@ -30,6 +30,7 @@ args = dict(
             'root_dir': CITYSCAPES_DIR,
             'type': 'crops',
             'size': 3000,
+            'class_id': 26,
             'transform': my_transforms.get_transform([
                 {
                     'name': 'RandomCrop',
