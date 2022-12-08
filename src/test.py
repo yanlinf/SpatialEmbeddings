@@ -5,8 +5,8 @@ Licensed under the CC BY-NC 4.0 license (https://creativecommons.org/licenses/by
 import os
 import time
 
-import torchvision
 from matplotlib import pyplot as plt
+import torchvision
 from tqdm import tqdm
 
 import test_config

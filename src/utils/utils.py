@@ -174,7 +174,7 @@ class Cluster:
                 if proposal.sum() > 128:
                     if unclustered[proposal].sum().float()/proposal.sum().float() > 0.5:
                         instance_map_masked[proposal.squeeze()] = count
-                        instance_mask = torch.zeros(height, width).byte()
+                        instance_mask = torch.zeros(height, width).bool()
                         instance_mask[mask.squeeze().cpu()] = proposal.cpu()
                         instances.append(
                             {'mask': instance_mask.squeeze()*255, 'score': seed_score})
