@@ -136,6 +136,7 @@ class Cluster:
 
     def cluster(self, prediction, n_sigma=1, threshold=0.5,
                 im_name=None, gt_instance=None, do_plot=False):
+        print(im_name)
 
         height, width = prediction.size(1), prediction.size(2)
         xym_s = self.xym[:, 0:height, 0:width]
@@ -324,6 +325,7 @@ class Cluster:
         sigma: tensor of shape (1, h, w)
         n_sigma: int
         """
+        height, width = instance_map.size()
         mask_flatten = mask.squeeze().view(-1).cpu().numpy()  # (h, w)
         spatial_emb_flatten = spatial_emb.permute(1, 2, 0).view(-1, 2).cpu().numpy()
         instance_map_flatten = instance_map.view(-1).cpu().numpy()
@@ -338,14 +340,39 @@ class Cluster:
             n_components=max_id,
             means_init=centroids,
             precisions_init=init_precision,
+            weights_init=np.full(max_id, 1 / max_id),
             max_iter=1
         )
-        gmm.fit_predict(X)
+        y = gmm.fit_predict(X)
+        prob = gmm.predict_proba(X)
+        # print(gmm.covariances_)
+        log_prob = np.log(prob)
+        print(log_prob.max(1))
+        # print(prob.max(1).mean())
         centers = torch.tensor(gmm.means_, device=spatial_emb.device)
-        instance_map, instances = self.get_instance_map(
-            spatial_emb, sigma, n_sigma, mask, centers,
-            [d['score'] for d in instances]
-        )
+        instance_map = instance_map.clone()
+        instance_map[:] = 0
+        instance_map_masked = torch.zeros(mask.sum()).byte()
+        new_instances = []
+        for i in sorted(set(y.tolist())):
+            proposal = (y == i) & (log_prob[:, i] > -1e-6)
+            instance_map_masked[proposal] = i + 1
+            instance_map[mask.squeeze()] = instance_map_masked
+
+            instance_mask = torch.zeros(height, width).bool()
+            instance_mask[mask.squeeze().cpu()] = torch.tensor(proposal, dtype=bool)
+
+            new_instances.append(
+                {
+                    'mask': instance_mask.squeeze() * 255,
+                    'score': instances[i]['score']
+                }
+            )
+
+        # instance_map, instances = self.get_instance_map(
+        #     spatial_emb, sigma, n_sigma, mask, centers,
+        #     [d['score'] for d in instances]
+        # )
         return centers, instance_map, instances
 
 
