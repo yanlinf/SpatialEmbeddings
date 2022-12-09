@@ -47,7 +47,7 @@ if os.path.exists(args['checkpoint_path']):
     state = torch.load(args['checkpoint_path'])
     model.load_state_dict(state['model_state_dict'], strict=True)
 else:
-    assert(False, 'checkpoint_path {} does not exist!'.format(args['checkpoint_path']))
+    assert (False, 'checkpoint_path {} does not exist!'.format(args['checkpoint_path']))
 
 model.eval()
 
@@ -58,23 +58,31 @@ cluster = Cluster()
 visualizer = Visualizer(('image', 'pred', 'sigma', 'seed'))
 
 with torch.no_grad():
-
-    for sample in tqdm(dataset_it):
+    for idx, sample in tqdm(enumerate(dataset_it)):
+        if idx >= 20:
+            break
 
         im = sample['image']
         instances = sample['instance'].squeeze()
-        
+
         output = model(im)
-        instance_map, predictions = cluster.cluster(output[0], threshold=0.9)
+        instance_map, predictions = cluster.cluster(
+            output[0],
+            threshold=0.9,
+            im_name=os.path.basename(sample['im_name'][0]),
+            gt_instance=instances
+        )
+
+        print(instance_map.size())
+        print(predictions.size())
 
         if args['display']:
-
             visualizer.display(im, 'image')
-                
+
             visualizer.display([instance_map.cpu(), instances.cpu()], 'pred')
 
             sigma = output[0][2].cpu()
-            sigma = (sigma - sigma.min())/(sigma.max() - sigma.min())
+            sigma = (sigma - sigma.min()) / (sigma.max() - sigma.min())
             sigma[instances == 0] = 0
             visualizer.display(sigma, 'sigma')
 

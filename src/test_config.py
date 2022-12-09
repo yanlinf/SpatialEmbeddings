@@ -19,8 +19,8 @@ args = dict(
 
     save=True,
     save_dir='./masks/',
-    # checkpoint_path='./pretrained_models/cars_pretrained_model.pth',
-    checkpoint_path='./exp/best_iou_model.pth',
+    checkpoint_path='./pretrained_models/cars_pretrained_model.pth',
+    # checkpoint_path='./exp/best_iou_model.pth',
 
     dataset={
         'name': 'cityscapes',
