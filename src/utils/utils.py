@@ -5,13 +5,13 @@ Licensed under the CC BY-NC 4.0 license (https://creativecommons.org/licenses/by
 import collections
 import os
 import threading
-
+from typing import List
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from PIL import Image
-
+from sklearn.mixture import GaussianMixture
 import torch
 
 
@@ -135,7 +135,7 @@ class Cluster:
         return instance_map
 
     def cluster(self, prediction, n_sigma=1, threshold=0.5,
-                im_name=None, gt_instance=None):
+                im_name=None, gt_instance=None, do_plot=False):
 
         height, width = prediction.size(1), prediction.size(2)
         xym_s = self.xym[:, 0:height, 0:width]
@@ -157,29 +157,32 @@ class Cluster:
             unclustered = torch.ones(mask.sum()).byte().cuda()
             instance_map_masked = torch.zeros(mask.sum()).byte().cuda()
 
-            figure = plt.Figure(figsize=(16, 16))
-            ax0 = figure.add_subplot(2, 1, 1)
-            ax1 = figure.add_subplot(2, 1, 2)
+            if do_plot:
+                figure = plt.Figure(figsize=(16, 24))
+                ax0 = figure.add_subplot(3, 1, 1)
+                ax1 = figure.add_subplot(3, 1, 2)
+                ax2 = figure.add_subplot(3, 1, 3)
 
-            for ax in (ax0, ax1):
-                ax.scatter(
-                    spatial_emb_masked[0].cpu().numpy(),
-                    spatial_emb_masked[1].cpu().numpy(),
-                    color='#dddddd',
-                    alpha=0.3,
-                    zorder=-1
-                )
+                for ax in (ax0, ax1, ax2):
+                    ax.scatter(
+                        spatial_emb_masked[0].cpu().numpy(),
+                        spatial_emb_masked[1].cpu().numpy(),
+                        color='#dddddd',
+                        alpha=0.3,
+                        zorder=-1
+                    )
 
             for inst_id in range(1, gt_instance.max().item() + 1):
                 gt_mask = gt_instance == inst_id
                 gt_mask = gt_mask[mask.squeeze()].view(-1)
-                ax1.scatter(
-                    spatial_emb_masked[0, gt_mask].cpu().numpy(),
-                    spatial_emb_masked[1, gt_mask].cpu().numpy(),
-                    # color=np.random.rand(3,),
-                    label='object_' + str(count),
-                    alpha=0.3,
-                )
+                if do_plot:
+                    ax1.scatter(
+                        spatial_emb_masked[0, gt_mask].cpu().numpy(),
+                        spatial_emb_masked[1, gt_mask].cpu().numpy(),
+                        # color=np.random.rand(3,),
+                        label='object_' + str(count),
+                        alpha=0.3,
+                    )
 
             while (unclustered.sum() > 128):
 
@@ -211,26 +214,122 @@ class Cluster:
 
                         count += 1
 
-                        ax0.text(
-                            center[0].item(), center[1].item(), str(count),
-                            fontsize=20
-                        )
+                        if do_plot:
+                            ax0.text(
+                                center[0].item(), center[1].item(), str(count),
+                                fontsize=20
+                            )
 
-                        ax0.scatter(
-                            spatial_emb_masked[0, proposal].cpu().numpy(),
-                            spatial_emb_masked[1, proposal].cpu().numpy(),
-                            # color=np.random.rand(3,),
-                            label='object_' + str(count),
-                            alpha=0.3,
-                        )
+                            ax0.scatter(
+                                spatial_emb_masked[0, proposal].cpu().numpy(),
+                                spatial_emb_masked[1, proposal].cpu().numpy(),
+                                # color=np.random.rand(3,),
+                                label='object_' + str(count),
+                                alpha=0.3,
+                            )
 
                 unclustered[proposal] = 0
 
             instance_map[mask.squeeze().cpu()] = instance_map_masked.cpu()
 
-            figure.savefig(f'tmp/{im_name}')
+            if len(instances) > 0:
+
+                centers, instance_map, instances = self.gmm_refine_clustering(
+                    instance_map,
+                    instances,
+                    spatial_emb,
+                    mask,
+                    sigma, n_sigma
+                )
+
+                if do_plot:
+                    n_instances = instance_map.max()
+                    for i in range(1, n_instances + 1):
+                        ax2.text(
+                            centers[i - 1, 0].item(),
+                            centers[i - 1, 1].item(), str(i),
+                            fontsize=20
+                        )
+                        spatial_emb_flatten = spatial_emb.permute(1, 2, 0).view(-1, 2)
+                        inst_mask = (instance_map == i).view(-1)
+                        ax2.scatter(
+                            spatial_emb_flatten[inst_mask, 0].cpu().numpy(),
+                            spatial_emb_flatten[inst_mask, 1].cpu().numpy(),
+                            # color=np.random.rand(3,),
+                            label='object_' + str(count),
+                            alpha=0.3,
+                        )
+
+            if do_plot:
+                figure.savefig(f'tmp/{im_name}')
 
         return instance_map, instances
+
+    def get_instance_map(self, spatial_emb, sigma, n_sigma, mask,
+                         seed_emb, seed_scores: List[float]):
+        """
+        sigma: n_sigma x h x w
+        """
+        _, height, width = spatial_emb.size()
+        instance_map = torch.zeros(height, width).byte()
+        instances = []
+
+        spatial_emb_masked = spatial_emb[mask.expand_as(spatial_emb)].view(2, -1)
+        sigma_masked = sigma[mask.expand_as(sigma)].view(n_sigma, -1)
+
+        instance_map_masked = torch.zeros(mask.sum()).byte().cuda()
+
+        for i, (center, score) in enumerate(zip(seed_emb, seed_scores)):
+            # print('i = ', i)
+            center = center[:, None]
+            seed = torch.argmin(((spatial_emb_masked - center) ** 2).sum(0))
+            s = torch.exp(sigma_masked[:, seed:seed + 1] * 10)
+            dist = torch.exp(-1 * torch.sum(torch.pow(spatial_emb_masked -
+                                                      center, 2) * s, 0, keepdim=True))
+
+            proposal = (dist > 0.5).squeeze()
+            # print('proposal', proposal.sum())
+            instance_map_masked[proposal.squeeze()] = i + 1
+            # print(instance_map_masked.max(), 'qqq')
+            instance_mask = torch.zeros(height, width).bool()
+            instance_mask[mask.squeeze().cpu()] = proposal.cpu()
+
+            instances.append(
+                {'mask': instance_mask.squeeze() * 255, 'score': score})
+
+            instance_map[mask.squeeze().cpu()] = instance_map_masked.cpu()
+        #     print(instance_map.max(), 'asfd')
+        # print(instance_map.max())
+        # print(len(instances))
+        return instance_map, instances
+
+    def gmm_refine_clustering(self,
+                              instance_map,
+                              instances,
+                              spatial_emb,
+                              mask, sigma, n_sigma):
+        """
+        instance_map: (h, w)
+        instances: List[dict]
+        spatial_emb: (2, h, w)
+        mask: (1, h, w)
+        """
+        mask_flatten = mask.squeeze().view(-1).cpu().numpy()  # (h, w)
+        spatial_emb_flatten = spatial_emb.permute(1, 2, 0).view(-1, 2).cpu().numpy()
+        instance_map_flatten = instance_map.view(-1).cpu().numpy()
+        X = spatial_emb_flatten[mask_flatten]
+        max_id = instance_map_flatten.max()
+        centroids = [spatial_emb_flatten[instance_map_flatten == i].mean(0) for i in
+                     range(1, max_id + 1)]
+        centroids = np.stack(centroids, axis=0)
+        gmm = GaussianMixture(n_components=max_id, means_init=centroids, max_iter=10)
+        gmm.fit_predict(X)
+        centers = torch.tensor(gmm.means_, device=spatial_emb.device)
+        instance_map, instances = self.get_instance_map(
+            spatial_emb, sigma, n_sigma, mask, centers,
+            [d['score'] for d in instances]
+        )
+        return centers, instance_map, instances
 
 
 class Logger:

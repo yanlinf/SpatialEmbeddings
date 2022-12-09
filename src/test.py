@@ -58,9 +58,9 @@ cluster = Cluster()
 visualizer = Visualizer(('image', 'pred', 'sigma', 'seed'))
 
 with torch.no_grad():
-    for idx, sample in tqdm(enumerate(dataset_it)):
-        if idx >= 20:
-            break
+    for idx, sample in tqdm(enumerate(dataset_it),total=len(dataset_it), disable=False):
+        # if idx >= 20:
+        #     break
 
         im = sample['image']
         instances = sample['instance'].squeeze()
@@ -72,9 +72,6 @@ with torch.no_grad():
             im_name=os.path.basename(sample['im_name'][0]),
             gt_instance=instances
         )
-
-        print(instance_map.size())
-        print(predictions.size())
 
         if args['display']:
             visualizer.display(im, 'image')
