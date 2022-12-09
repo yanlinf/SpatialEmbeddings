@@ -341,38 +341,41 @@ class Cluster:
             means_init=centroids,
             precisions_init=init_precision,
             weights_init=np.full(max_id, 1 / max_id),
-            max_iter=1
+            max_iter=8
         )
-        y = gmm.fit_predict(X)
-        prob = gmm.predict_proba(X)
-        # print(gmm.covariances_)
-        log_prob = np.log(prob)
-        print(log_prob.max(1))
-        # print(prob.max(1).mean())
-        centers = torch.tensor(gmm.means_, device=spatial_emb.device)
-        instance_map = instance_map.clone()
-        instance_map[:] = 0
-        instance_map_masked = torch.zeros(mask.sum()).byte()
-        new_instances = []
-        for i in sorted(set(y.tolist())):
-            proposal = (y == i) & (log_prob[:, i] > -1e-6)
-            instance_map_masked[proposal] = i + 1
-            instance_map[mask.squeeze()] = instance_map_masked
+        # y = gmm.fit_predict(X)
+        # prob = gmm.predict_proba(X)
+        # # print(gmm.covariances_)
+        # log_prob = np.log(prob)
+        # print(log_prob.max(1))
+        # # print(prob.max(1).mean())
+        if hasattr(gmm, 'means_'):
+            centers = torch.tensor(gmm.means_, device=spatial_emb.device)
+        else:
+            centers = torch.tensor(centroids, device=spatial_emb.device)
+        # instance_map = instance_map.clone()
+        # instance_map[:] = 0
+        # instance_map_masked = torch.zeros(mask.sum()).byte()
+        # new_instances = []
+        # for i in sorted(set(y.tolist())):
+        #     proposal = (y == i) & (log_prob[:, i] > -1e-6)
+        #     instance_map_masked[proposal] = i + 1
+        #     instance_map[mask.squeeze()] = instance_map_masked
+        #
+        #     instance_mask = torch.zeros(height, width).bool()
+        #     instance_mask[mask.squeeze().cpu()] = torch.tensor(proposal, dtype=bool)
+        #
+        #     new_instances.append(
+        #         {
+        #             'mask': instance_mask.squeeze() * 255,
+        #             'score': instances[i]['score']
+        #         }
+        #     )
 
-            instance_mask = torch.zeros(height, width).bool()
-            instance_mask[mask.squeeze().cpu()] = torch.tensor(proposal, dtype=bool)
-
-            new_instances.append(
-                {
-                    'mask': instance_mask.squeeze() * 255,
-                    'score': instances[i]['score']
-                }
-            )
-
-        # instance_map, instances = self.get_instance_map(
-        #     spatial_emb, sigma, n_sigma, mask, centers,
-        #     [d['score'] for d in instances]
-        # )
+        instance_map, instances = self.get_instance_map(
+            spatial_emb, sigma, n_sigma, mask, centers,
+            [d['score'] for d in instances]
+        )
         return centers, instance_map, instances
 
 

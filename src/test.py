@@ -59,8 +59,8 @@ visualizer = Visualizer(('image', 'pred', 'sigma', 'seed'))
 
 with torch.no_grad():
     for idx, sample in tqdm(enumerate(dataset_it),total=len(dataset_it), disable=False):
-        if idx >= 20:
-            break
+        # if idx >= 20:
+        #     break
 
         im = sample['image']
         instances = sample['instance'].squeeze()
@@ -71,7 +71,7 @@ with torch.no_grad():
             threshold=0.9,
             im_name=os.path.basename(sample['im_name'][0]),
             gt_instance=instances,
-            do_plot=True
+            do_plot=False
         )
 
         if args['display']:

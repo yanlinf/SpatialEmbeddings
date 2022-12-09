@@ -18,7 +18,7 @@ args = dict(
     display=False,
 
     save=True,
-    save_dir='./masks/',
+    save_dir='./masks_8/',
     checkpoint_path='./pretrained_models/cars_pretrained_model.pth',
     # checkpoint_path='./exp/best_iou_model.pth',
 
