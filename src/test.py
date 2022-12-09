@@ -70,7 +70,8 @@ with torch.no_grad():
             output[0],
             threshold=0.9,
             im_name=os.path.basename(sample['im_name'][0]),
-            gt_instance=instances
+            gt_instance=instances,
+            do_plot=False
         )
 
         if args['display']:

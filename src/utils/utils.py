@@ -5,7 +5,7 @@ Licensed under the CC BY-NC 4.0 license (https://creativecommons.org/licenses/by
 import collections
 import os
 import threading
-from typing import List
+from typing import List, Tuple
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -265,11 +265,15 @@ class Cluster:
 
         return instance_map, instances
 
-    def get_instance_map(self, spatial_emb, sigma, n_sigma, mask,
-                         seed_emb, seed_scores: List[float]):
-        """
-        sigma: n_sigma x h x w
-        """
+    def get_instance_map(
+            self,
+            spatial_emb: torch.FloatTensor,
+            sigma: torch.FloatTensor,
+            n_sigma: int,
+            mask: torch.Tensor,
+            seed_emb: torch.FloatTensor,
+            seed_scores: List[float]
+    ):
         _, height, width = spatial_emb.size()
         instance_map = torch.zeros(height, width).byte()
         instances = []
@@ -303,16 +307,22 @@ class Cluster:
         # print(len(instances))
         return instance_map, instances
 
-    def gmm_refine_clustering(self,
-                              instance_map,
-                              instances,
-                              spatial_emb,
-                              mask, sigma, n_sigma):
+    def gmm_refine_clustering(
+            self,
+            instance_map: torch.LongTensor,
+            instances: List[dict],
+            spatial_emb: torch.FloatTensor,
+            mask: torch.Tensor,
+            sigma: torch.FloatTensor,
+            n_sigma: int
+    ) -> Tuple[torch.Tensor, torch.Tensor, List[dict]]:
         """
-        instance_map: (h, w)
+        instance_map: tensor of shape (h, w)
         instances: List[dict]
-        spatial_emb: (2, h, w)
-        mask: (1, h, w)
+        spatial_emb: tensor of shape (2, h, w)
+        mask: tensor of shape (1, h, w)
+        sigma: tensor of shape (1, h, w)
+        n_sigma: int
         """
         mask_flatten = mask.squeeze().view(-1).cpu().numpy()  # (h, w)
         spatial_emb_flatten = spatial_emb.permute(1, 2, 0).view(-1, 2).cpu().numpy()
@@ -322,7 +332,14 @@ class Cluster:
         centroids = [spatial_emb_flatten[instance_map_flatten == i].mean(0) for i in
                      range(1, max_id + 1)]
         centroids = np.stack(centroids, axis=0)
-        gmm = GaussianMixture(n_components=max_id, means_init=centroids, max_iter=10)
+        coovs = [np.cov(spatial_emb_flatten[instance_map_flatten == i].T) for i in range(1, max_id + 1)]
+        init_precision = [np.linalg.inv(x) for x in coovs]
+        gmm = GaussianMixture(
+            n_components=max_id,
+            means_init=centroids,
+            precisions_init=init_precision,
+            max_iter=1
+        )
         gmm.fit_predict(X)
         centers = torch.tensor(gmm.means_, device=spatial_emb.device)
         instance_map, instances = self.get_instance_map(
