@@ -336,20 +336,21 @@ class Cluster:
         centroids = np.stack(centroids, axis=0)
         coovs = [np.cov(spatial_emb_flatten[instance_map_flatten == i].T) for i in range(1, max_id + 1)]
         init_precision = [np.linalg.inv(x) for x in coovs]
+        n_iter = 15
         gmm = GaussianMixture(
             n_components=max_id,
             means_init=centroids,
             precisions_init=init_precision,
             weights_init=np.full(max_id, 1 / max_id),
-            max_iter=8
+            max_iter=n_iter
         )
-        # y = gmm.fit_predict(X)
         # prob = gmm.predict_proba(X)
         # # print(gmm.covariances_)
         # log_prob = np.log(prob)
         # print(log_prob.max(1))
         # # print(prob.max(1).mean())
-        if hasattr(gmm, 'means_'):
+        if n_iter > 0:
+            y = gmm.fit_predict(X)
             centers = torch.tensor(gmm.means_, device=spatial_emb.device)
         else:
             centers = torch.tensor(centroids, device=spatial_emb.device)
